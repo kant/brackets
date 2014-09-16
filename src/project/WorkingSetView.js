@@ -134,23 +134,22 @@ define(function (require, exports, module) {
 
         $el.mousedown(function (e) {
  
-            var offset = $el.offset(),
+            var count = 0,
+                offset = $el.offset(),
                 $lastEl,
                 $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>"),
                 $copy = $el.clone(),
-                $list = $("<ul>").append($copy);
+                $list = $("<ul>").append($copy),
+                $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
             
             $ghost.append($list);
           
             $list.css("padding", "0");
             
-            var $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+            
 
-            if ($elem && $elem !== $lastEl) {
+            if ($elem.length && $elem !== $lastEl) {
                 $elem.css("background-color", "red");
-                if ($lastEl) {
-                    $lastEl.css("background-color", "");
-                }
                 $lastEl = $elem;
             }
             
@@ -166,14 +165,15 @@ define(function (require, exports, module) {
                   
             
             $(window).on("mousemove.wsvdragging", function (e) {
-                
+                $ghost.hide();
                 $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
-                
-                if ($elem && $elem !== $lastEl) {
-                    $elem.css("background-color", "red");
+                $ghost.show();
+                if ($elem.length && $elem !== $lastEl) {
                     if ($lastEl) {
                         $lastEl.css("background-color", "");
+                        ++count;
                     }
+                    $elem.css("background-color", "red");
                     $lastEl = $elem;
                 }
                 
@@ -189,6 +189,9 @@ define(function (require, exports, module) {
                 $(window).off(".wsvdragging");
                 $ghost.remove();
                 $el.css("visibility", "");
+                if ($lastEl) {
+                    $lastEl.css("background-color", "");
+                }
             });
         });
     }
