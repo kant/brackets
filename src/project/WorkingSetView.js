@@ -118,6 +118,12 @@ define(function (require, exports, module) {
         ViewUtils.toggleClass($(listItem), "selected", shouldBeSelected);
     }
 
+    function viewFromEl($el) {
+        return _.find(_views, function (view) {
+            return (view.$el === $el);
+        });
+    }
+    
     /** 
      * Determines if a file is dirty
      * @private
@@ -139,15 +145,9 @@ define(function (require, exports, module) {
                 $lastEl,
                 $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>"),
                 $copy = $el.clone(),
-                $list = $("<ul>").append($copy),
+                $list = $("<ul>").append($copy).css("padding", "0").appendTo($ghost),
                 $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
             
-            $ghost.append($list);
-          
-            $list.css("padding", "0");
-            
-            
-
             if ($elem.length && $elem !== $lastEl) {
                 $elem.css("background-color", "red");
                 $lastEl = $elem;
@@ -159,14 +159,18 @@ define(function (require, exports, module) {
             
             $copy.removeClass("can-close");
             
-            $el.css("visibility", "hidden");
+            $el.css("opacity", ".25");
 
             $ghost.appendTo($("#working-set-list-container"));
                   
             
             $(window).on("mousemove.wsvdragging", function (e) {
-                $ghost.hide();
+                Menus.closeAll();
+
+                $ghost.hide(); // so closest finds the actual element
+                $el.css("opacity", "");
                 $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+                $el.css("opacity", ".25");
                 $ghost.show();
                 if ($elem.length && $elem !== $lastEl) {
                     if ($lastEl) {
@@ -179,16 +183,12 @@ define(function (require, exports, module) {
                 
                 $ghost.css({top: e.pageY,
                             left: offset.left});
-                            
-
-                
-                
             });
 
             $(window).on("mouseup.wsvdragging", function (e) {
                 $(window).off(".wsvdragging");
                 $ghost.remove();
-                $el.css("visibility", "");
+                $el.css("opacity", "");
                 if ($lastEl) {
                     $lastEl.css("background-color", "");
                 }
