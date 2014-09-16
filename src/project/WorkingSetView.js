@@ -130,6 +130,70 @@ define(function (require, exports, module) {
         return (docIfOpen && docIfOpen.isDirty);
     }
     
+    function _makeDraggable($el) {
+
+        $el.mousedown(function (e) {
+ 
+            var offset = $el.offset(),
+                $lastEl,
+                $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>"),
+                $copy = $el.clone(),
+                $list = $("<ul>").append($copy);
+            
+            $ghost.append($list);
+          
+            $list.css("padding", "0");
+            
+            var $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+
+            if ($elem && $elem !== $lastEl) {
+                $elem.css("background-color", "red");
+                if ($lastEl) {
+                    $lastEl.css("background-color", "");
+                }
+                $lastEl = $elem;
+            }
+            
+            $ghost.css({position: "absolute",
+                            top: offset.top,
+                            left: offset.left});
+            
+            $copy.removeClass("can-close");
+            
+            $el.css("visibility", "hidden");
+
+            $ghost.appendTo($("#working-set-list-container"));
+                  
+            
+            $(window).on("mousemove.wsvdragging", function (e) {
+                
+                $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+                
+                if ($elem && $elem !== $lastEl) {
+                    $elem.css("background-color", "red");
+                    if ($lastEl) {
+                        $lastEl.css("background-color", "");
+                    }
+                    $lastEl = $elem;
+                }
+                
+                $ghost.css({top: e.pageY,
+                            left: offset.left});
+                            
+
+                
+                
+            });
+
+            $(window).on("mouseup.wsvdragging", function (e) {
+                $(window).off(".wsvdragging");
+                $ghost.remove();
+                $el.css("visibility", "");
+            });
+        });
+    }
+    
+    
     /* 
      * WorkingSetView constructor
      * @constructor
@@ -577,17 +641,7 @@ define(function (require, exports, module) {
         } else if (showIcon && $fileStatusIcon.length === 0) {
             
             $fileStatusIcon = $("<div class='file-status-icon'></div>")
-                .prependTo(listElement)
-                .mousedown(function (e) {
-                    // Try to drag if that is what is wanted if not it will be the equivalent to File > Close;
-                    // it doesn't merely remove a file from the working set
-                    self._reorderListItem(e, $(this).parent(), true);
-                    
-                    // stopPropagation of mousedown for fileStatusIcon so the parent <LI> item, which
-                    // selects documents on mousedown, doesn't select the document in the case 
-                    // when the click is on fileStatusIcon
-                    e.stopPropagation();
-                });
+                .prependTo(listElement);
         }
 
         // Set icon's class
@@ -618,11 +672,7 @@ define(function (require, exports, module) {
         // Update the listItem's apperance
         this._updateFileStatusIcon($newItem, _isOpenAndDirty(file), false);
         _updateListItemSelection($newItem, selectedFile);
-
-        $newItem.mousedown(function (e) {
-            self._reorderListItem(e, $(this));
-            e.preventDefault();
-        });
+        _makeDraggable($newItem);
         
         $newItem.hover(
             function () {
@@ -923,5 +973,5 @@ define(function (require, exports, module) {
     // Public API
     exports.createWorkingSetViewForPane   = createWorkingSetViewForPane;
     exports.refresh                       = refresh;
-    exports.syncSelectionIndicator         = syncSelectionIndicator;
+    exports.syncSelectionIndicator        = syncSelectionIndicator;
 });
