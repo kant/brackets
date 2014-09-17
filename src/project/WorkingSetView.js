@@ -137,18 +137,48 @@ define(function (require, exports, module) {
     }
     
     function _makeDraggable($el) {
+        var interval;
+        
+        function endScroll() {
+            window.clearInterval(interval);
+            interval = false;
+        }
+        
+        function scroll($el, dir, callback) {
+            var el = $el[0],
+                maxScroll = el.scrollHeight - el.clientHeight;
+            if (dir && !interval) {
+                // Scroll view if the mouse is over the first or last pixels of the container
+                interval = window.setInterval(function () {
+                    var scrollTop = $el.scrollTop();
+                    if ((dir === -1 && scrollTop <= 0) || (dir === 1 && scrollTop >= maxScroll)) {
+                        endScroll();
+                    } else {
+                        $el.scrollTop(scrollTop + 7 * dir);
+                        callback(scrollTop + 7 * dir);
+                    }
+                }, 100);
+            } else if (!dir && interval) {
+                endScroll();
+            }
+        }
 
         $el.mousedown(function (e) {
- 
-            var count = 0,
+            var scrollDir = 0,
                 offset = $el.offset(),
                 $lastEl,
+                $currentContainer,
+                containerOffset,
                 $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>"),
                 $copy = $el.clone(),
                 $list = $("<ul>").append($copy).css("padding", "0").appendTo($ghost),
                 $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+
+            Menus.closeAll();
             
             if ($elem.length && $elem !== $lastEl) {
+                $currentContainer = $elem.parents(".open-files-container");
+                containerOffset = $currentContainer.offset();
                 $elem.css("background-color", "red");
                 $lastEl = $elem;
             }
@@ -165,24 +195,66 @@ define(function (require, exports, module) {
                   
             
             $(window).on("mousemove.wsvdragging", function (e) {
-                Menus.closeAll();
-
+                var pageY = e.pageY;
                 $ghost.hide(); // so closest finds the actual element
                 $el.css("opacity", "");
-                $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+                $elem = $(document.elementFromPoint(e.pageX, pageY)).closest("#working-set-list-container li");
                 $el.css("opacity", ".25");
                 $ghost.show();
-                if ($elem.length && $elem !== $lastEl) {
-                    if ($lastEl) {
-                        $lastEl.css("background-color", "");
-                        ++count;
+
+                function drag(e) {
+
+                    scrollDir = 0;
+
+                    if ($elem.length) {
+                        if ($elem !== $lastEl) {
+                            if ($lastEl) {
+                                $lastEl.css("background-color", "");
+                            }
+                            $currentContainer = $elem.parents(".open-files-container");
+                            containerOffset = $currentContainer.offset();
+                            $elem.css("background-color", "red");
+                            $lastEl = $elem;
+                        }
+                    } else if (containerOffset) {
+                        if (!((Math.abs(containerOffset.top - e.pageY) < 33 ||
+                                Math.abs(e.pageY - $currentContainer.height() + containerOffset.top) > 33))) {
+                        
+                            $currentContainer = containerOffset = undefined;
+                        }
                     }
-                    $elem.css("background-color", "red");
-                    $lastEl = $elem;
+
+                    $ghost.css({top: e.pageY,
+                                left: offset.left});
+
+                    scrollDir = 0;
+                    if ($currentContainer && $currentContainer.length) {
+                        var topDelta = e.pageY - containerOffset.top,
+                            bottomDelta = e.pageY - ($currentContainer.height() + containerOffset.top),
+                            inRange = function (val) {
+                                return (val < 17 && val > -33);
+                            };
+                        
+                        if (inRange(topDelta)) {
+                            scrollDir = -1;
+                        } else if (inRange(bottomDelta)) {
+                            scrollDir = 1;
+                        }
+                    }
+                    if (scrollDir) {
+                        scroll($currentContainer, scrollDir, function (delta) {
+                            pageY += delta;
+                            $ghost.hide(); // so closest finds the actual element
+                            $elem = $(document.elementFromPoint(e.pageX, pageY)).closest("#working-set-list-container li");
+                            $ghost.show(); // so closest finds the actual element
+                            drag(e);
+                        });
+                    } else {
+                        endScroll();
+                    }
                 }
+                drag(e);
                 
-                $ghost.css({top: e.pageY,
-                            left: offset.left});
             });
 
             $(window).on("mouseup.wsvdragging", function (e) {
