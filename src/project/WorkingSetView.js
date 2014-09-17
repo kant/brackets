@@ -243,7 +243,7 @@ define(function (require, exports, module) {
                     }
                     if (scrollDir) {
                         scroll($currentContainer, scrollDir, function (delta) {
-                            pageY += delta;
+                            //pageY += delta;
                             $ghost.hide(); // so closest finds the actual element
                             $elem = $(document.elementFromPoint(e.pageX, pageY)).closest("#working-set-list-container li");
                             $ghost.show(); // so closest finds the actual element
