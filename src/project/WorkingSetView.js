@@ -145,10 +145,7 @@ define(function (require, exports, module) {
     
     function _makeDraggable($el) {
         var interval,
-            sorceFile = $el.data(_FILE_KEY),
-            sourceView = _viewFromEl($el),
-            sourcePaneId = sourceView.paneId,
-            startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath);
+            sorceFile = $el.data(_FILE_KEY);
 
 
         function endScroll() {
@@ -180,22 +177,21 @@ define(function (require, exports, module) {
         $el.mousedown(function (e) {
             var scrollDir = 0,
                 offset = $el.offset(),
-                $lastEl,
-                $currentContainer,
-                containerOffset,
                 $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>"),
                 $copy = $el.clone(),
                 $list = $("<ul>").append($copy).css("padding", "0").appendTo($ghost),
-                $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+                $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li"),
+                $currentContainer = $elem.parents(".open-files-container"),
+                containerOffset = $currentContainer.offset(),
+                sourceView = _viewFromEl($currentContainer),
+                sourcePaneId = sourceView.paneId,
+                startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath),
+                $lastEl = $elem,
+                currentIndex = startingIndex;
 
             Menus.closeAll();
             
-            if ($elem.length && $elem !== $lastEl) {
-                $currentContainer = $elem.parents(".open-files-container");
-                containerOffset = $currentContainer.offset();
-                $elem.css("background-color", "red");
-                $lastEl = $elem;
-            }
+            $elem.css("background-color", "red");
             
             $ghost.css({position: "absolute",
                             top: offset.top,
