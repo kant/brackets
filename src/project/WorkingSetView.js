@@ -118,12 +118,7 @@ define(function (require, exports, module) {
         ViewUtils.toggleClass($(listItem), "selected", shouldBeSelected);
     }
 
-    function viewFromEl($el) {
-        return _.find(_views, function (view) {
-            return (view.$el === $el);
-        });
-    }
-    
+
     /** 
      * Determines if a file is dirty
      * @private
@@ -135,13 +130,32 @@ define(function (require, exports, module) {
         var docIfOpen = DocumentManager.getOpenDocumentForPath(file.fullPath);
         return (docIfOpen && docIfOpen.isDirty);
     }
+
+        
+    function _viewFromEl($el) {
+        if (!$el.hasClass("working-set-view")) {
+            $el = $el.parents(".working-set-view");
+        }
+
+        return _.find(_views, function (view) {
+            return (view.$el[0] === $el[0]);
+        });
+    }
+    
     
     function _makeDraggable($el) {
-        var interval;
-        
+        var interval,
+            sorceFile = $el.data(_FILE_KEY),
+            sourceView = _viewFromEl($el),
+            sourcePaneId = sourceView.paneId,
+            startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath);
+
+
         function endScroll() {
-            window.clearInterval(interval);
-            interval = false;
+            if (interval) {
+                window.clearInterval(interval);
+                interval = undefined;
+            }
         }
         
         function scroll($el, dir, callback) {
@@ -155,7 +169,7 @@ define(function (require, exports, module) {
                         endScroll();
                     } else {
                         $el.scrollTop(scrollTop + 7 * dir);
-                        callback(scrollTop + 7 * dir);
+                        callback();
                     }
                 }, 100);
             } else if (!dir && interval) {
@@ -242,8 +256,7 @@ define(function (require, exports, module) {
                         }
                     }
                     if (scrollDir) {
-                        scroll($currentContainer, scrollDir, function (delta) {
-                            //pageY += delta;
+                        scroll($currentContainer, scrollDir, function () {
                             $ghost.hide(); // so closest finds the actual element
                             $elem = $(document.elementFromPoint(e.pageX, pageY)).closest("#working-set-list-container li");
                             $ghost.show(); // so closest finds the actual element
