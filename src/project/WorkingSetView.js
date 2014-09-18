@@ -157,6 +157,7 @@ define(function (require, exports, module) {
         
         $el.mousedown(function (e) {
             var scrollDir = 0,
+                tryClosing = $(document.elementFromPoint(e.pageX, e.pageY)).hasClass("can-close"),
                 offset = $el.offset(),
                 $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>"),
                 $copy = $el.clone(),
@@ -178,20 +179,14 @@ define(function (require, exports, module) {
                 return $result;
             }
             
-            Menus.closeAll();
-    
-            _suppressSortRedrawForAllViews(true);
+            function findCLosestWorkingSetView(e) {
+                var $result;
+                $ghost.hide(); // we don't want elementFromPoint picking up the ghost
+                $result = $(document.elementFromPoint(e.pageX, e.pageY)).closest(".working-set-view");
+                $ghost.show();
+                return $result;
+            }
             
-            $ghost.css({position: "absolute",
-                            top: offset.top,
-                            left: offset.left});
-            
-            $copy.removeClass("can-close");
-            
-            $el.css("opacity", ".25");
-
-            $ghost.appendTo($("#working-set-list-container"));
-                  
             $(window).on("mousemove.wsvdragging", function (e) {
                 $elem = findCLosestWorkingSetItem(e);
 
@@ -222,6 +217,17 @@ define(function (require, exports, module) {
                                 Math.abs(e.pageY - $currentContainer.height() + containerOffset.top) > 33))) {
                         
                             $currentContainer = containerOffset = undefined;
+                        } else {
+                            var $candidateView = findCLosestWorkingSetView(e),
+                                $candidateContainer = $candidateView.find(".open-files-container");
+                            if ($candidateContainer.length) {
+                                $currentContainer = $candidateContainer;
+                                containerOffset = $currentContainer.offset();
+                                currentView = _viewFromEl($currentContainer);
+                                currentPaneId = currentView.paneId;
+
+                                $currentContainer.find("ul").prepend($el);
+                            }
                         }
                     }
 
@@ -255,12 +261,30 @@ define(function (require, exports, module) {
                 
             });
 
-            $(window).on("mouseup.wsvdragging", function (e) {
+            function finished() {
+                window.onmousewheel = window.document.onmousewheel = null;
+                endScroll();
                 $(window).off(".wsvdragging");
                 $ghost.remove();
                 $el.css("opacity", "");
-
-                if (sourcePaneId === currentPaneId) {
+            }
+            
+            $(window).on("mouseup.wsvdragging", function (e) {
+                finished();
+                
+                if (sourcePaneId === currentPaneId && startingIndex === $el.index()) {
+                    // Click on close icon, or middle click anywhere - close the item without selecting it first
+                    if (tryClosing || event.which === MIDDLE_BUTTON) {
+                        CommandManager.execute(Commands.FILE_CLOSE, {file: $el.data(_FILE_KEY),
+                                                                     paneId: sourcePaneId});
+                    } else {
+                        // Normal right and left click - select the item
+                        FileViewController.openAndSelectDocument($el.data(_FILE_KEY).fullPath,
+                                                                 FileViewController.WORKING_SET_VIEW,
+                                                                 sourcePaneId);
+                    }
+            
+                } else if (sourcePaneId === currentPaneId) {
                     MainViewManager._moveWorkingSetItem(sourcePaneId, startingIndex, $el.index());
                     currentView._rebuildViewList();
                 } else {
@@ -274,13 +298,31 @@ define(function (require, exports, module) {
             
             $(window).on("keydown.wsvdragging", function (e) {
                 if (e.keyCode === KeyEvent.DOM_VK_ESCAPE) {
-                    $(window).off(".wsvdragging");
-                    $ghost.remove();
+                    finished();
                     exports.refresh(true);
                     e.stopPropagation();
                 }
                 _suppressSortRedrawForAllViews(false);
             });
+            
+            
+            window.onmousewheel = window.document.onmousewheel = function (e) {
+                e.preventDefault();
+            };
+            
+            Menus.closeAll();
+    
+            _suppressSortRedrawForAllViews(true);
+            
+            $ghost.css({position: "absolute",
+                            top: offset.top,
+                            left: offset.left});
+            
+            $copy.removeClass("can-close");
+            
+            $el.css("opacity", ".25");
+
+            $ghost.appendTo($("#working-set-list-container"));
         });
     }
     
