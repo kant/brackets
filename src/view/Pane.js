@@ -369,6 +369,37 @@ define(function (require, exports, module) {
             this._notifyCurrentViewChange(null, currentView);
         }
     };
+
+    Pane.prototype.moveView = function (file, destination, destinationIndex) {
+        if ((this.getCurrentlyViewedPath() === file.fullPath)) {
+            var nextFile = this.traverseViewListByMRU(1, file.fullPath),
+                self = this;
+            if (nextFile) {
+                this._execOpenFile(nextFile.fullPath)
+                    .fail(function () {
+                        // the FILE_OPEN failed
+                        self._hideCurrentView();
+                    });
+            } else {
+                this._hideCurrentView();
+            }
+        }
+        
+        // Remove file from all 3 view lists
+        this._viewList.splice(this.findInViewList(file.fullPath), 1);
+        this._viewListMRUOrder.splice(this.findInViewListMRUOrder(file.fullPath), 1);
+        this._viewListAddedOrder.splice(this.findInViewListAddedOrder(file.fullPath), 1);
+        
+        //move the view,
+        var view = this._views[file.fullPath];
+        
+        // The view may not have been created
+        if (view) {
+            destination.addView(view);
+        }
+        
+        destination._addToViewList(file, destinationIndex);
+    };
     
     /**
      * Merges the another Pane object's contents into this Pane 
@@ -706,6 +737,11 @@ define(function (require, exports, module) {
         this._viewList.sort(_.partial(compareFn, this.id));
     };
 
+    
+    Pane.prototype.moveWorkingSetItem = function (fromIndex, toIndex) {
+        this._viewList.splice(toIndex, 0, this._viewList.splice(fromIndex, 1)[0]);
+    };
+    
     /**
      * Swaps two items in the file view list (used while dragging items in the working set view)
      * @param {number} index1 - the index of the first item to swap

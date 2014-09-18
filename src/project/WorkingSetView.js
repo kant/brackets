@@ -42,6 +42,7 @@ define(function (require, exports, module) {
         Menus                 = require("command/Menus"),
         FileViewController    = require("project/FileViewController"),
         ViewUtils             = require("utils/ViewUtils"),
+        KeyEvent              = require("utils/KeyEvent"),
         paneListTemplate      = require("text!htmlContent/working-set.html"),
         Strings               = require("strings"),
         _                     = require("thirdparty/lodash");
@@ -102,6 +103,13 @@ define(function (require, exports, module) {
         return (docIfOpen && docIfOpen.isDirty);
     }
     
+    
+    function _suppressSortRedrawForAllViews(suppress) {
+        _.forEach(_views, function (view) {
+            view.suppressSortRedraw = suppress;
+        });
+    }
+    
         
     function _viewFromEl($el) {
         if (!$el.hasClass("working-set-view")) {
@@ -145,6 +153,8 @@ define(function (require, exports, module) {
             }
         }
 
+
+        
         $el.mousedown(function (e) {
             var scrollDir = 0,
                 offset = $el.offset(),
@@ -157,13 +167,20 @@ define(function (require, exports, module) {
                 sourceView = _viewFromEl($currentContainer),
                 sourcePaneId = sourceView.paneId,
                 startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath),
-                $lastEl = $elem,
-                currentPaneId = sourcePaneId,
-                currentIndex = startingIndex;
+                currentView = sourceView,
+                currentPaneId = sourcePaneId;
 
-            Menus.closeAll();
+            function findCLosestWorkingSetItem(e) {
+                var $result;
+                $ghost.hide(); // we don't want elementFromPoint picking up the ghost
+                $result = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+                $ghost.show();
+                return $result;
+            }
             
-            $elem.css("background-color", "red");
+            Menus.closeAll();
+    
+            _suppressSortRedrawForAllViews(true);
             
             $ghost.css({position: "absolute",
                             top: offset.top,
@@ -175,32 +192,30 @@ define(function (require, exports, module) {
 
             $ghost.appendTo($("#working-set-list-container"));
                   
-            
             $(window).on("mousemove.wsvdragging", function (e) {
-                $ghost.hide(); // so closest finds the actual element
-                $elem = $(document.elementFromPoint(e.pageX, pageY)).closest("#working-set-list-container li");
-                $ghost.show();
+                $elem = findCLosestWorkingSetItem(e);
 
                 function drag(e) {
 
                     scrollDir = 0;
 
                     if ($elem.length) {
-                        if ($elem !== $lastEl) { // && $elem !== $el) {
-                            if ($lastEl) {
-                                $lastEl.css("background-color", "");
-                            }
+                        if ($elem !== $el) {
                             
                             $currentContainer = $elem.parents(".open-files-container");
                             containerOffset = $currentContainer.offset();
-                            $elem.css("background-color", "red");
-                            $lastEl = $elem;
-                            currentIndex = MainViewManager.findInWorkingSet(currentPaneId, $elem.data(_FILE_KEY).fullPath);
-                            /*
-                            if (currentIndex < startingIndex) {
-                                
+                            currentView = _viewFromEl($currentContainer);
+                            currentPaneId = currentView.paneId;
+
+                            if (e.pageY < $elem.offset().top) {
+                                // insert before
+                                $el.insertBefore($elem);
                             } else {
-                            }*/
+                                // insert after
+                                $el.insertAfter($elem);
+                            }
+                            
+                            
                         }
                     } else if (containerOffset) {
                         if (!((Math.abs(containerOffset.top - e.pageY) < 33 ||
@@ -229,9 +244,7 @@ define(function (require, exports, module) {
                     }
                     if (scrollDir) {
                         scroll($currentContainer, scrollDir, function () {
-                            $ghost.hide(); // so closest finds the actual element
-                            $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
-                            $ghost.show(); // so closest finds the actual element
+                            $elem = findCLosestWorkingSetItem(e);
                             drag(e);
                         });
                     } else {
@@ -246,9 +259,27 @@ define(function (require, exports, module) {
                 $(window).off(".wsvdragging");
                 $ghost.remove();
                 $el.css("opacity", "");
-                if ($lastEl) {
-                    $lastEl.css("background-color", "");
+
+                if (sourcePaneId === currentPaneId) {
+                    MainViewManager._moveWorkingSetItem(sourcePaneId, startingIndex, $el.index());
+                    currentView._rebuildViewList();
+                } else {
+                    MainViewManager._moveView(sourcePaneId, currentPaneId, $el.data(_FILE_KEY), $el.index());
+                    exports.refresh(true);
                 }
+
+                _suppressSortRedrawForAllViews(false);
+
+            });
+            
+            $(window).on("keydown.wsvdragging", function (e) {
+                if (e.keyCode === KeyEvent.DOM_VK_ESCAPE) {
+                    $(window).off(".wsvdragging");
+                    $ghost.remove();
+                    exports.refresh(true);
+                    e.stopPropagation();
+                }
+                _suppressSortRedrawForAllViews(false);
             });
         });
     }
@@ -976,9 +1007,13 @@ define(function (require, exports, module) {
     /** 
      * Refreshes all Pane View List Views
      */
-    function refresh() {
-        _.forEach(_views, function (workingSetListView) {
-            workingSetListView._redraw();
+    function refresh(rebuild) {
+        _.forEach(_views, function (view) {
+            if (rebuild) {
+                view._rebuildViewList();
+            } else {
+                view._redraw();
+            }
         });
     }
     
@@ -986,8 +1021,8 @@ define(function (require, exports, module) {
      * Synchronizes the selection indicator for all views
      */
     function syncSelectionIndicator() {
-        _.forEach(_views, function (workingSetListView) {
-            workingSetListView.$openFilesContainer.triggerHandler("scroll");
+        _.forEach(_views, function (view) {
+            view.$openFilesContainer.triggerHandler("scroll");
         });
     }
     
@@ -998,5 +1033,5 @@ define(function (require, exports, module) {
     // Public API
     exports.createWorkingSetViewForPane   = createWorkingSetViewForPane;
     exports.refresh                       = refresh;
-    exports.syncSelectionIndicator         = syncSelectionIndicator;
+    exports.syncSelectionIndicator        = syncSelectionIndicator;
 });
