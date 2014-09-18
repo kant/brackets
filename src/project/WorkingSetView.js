@@ -187,6 +187,7 @@ define(function (require, exports, module) {
                 sourcePaneId = sourceView.paneId,
                 startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath),
                 $lastEl = $elem,
+                currentPaneId = sourcePaneId,
                 currentIndex = startingIndex;
 
             Menus.closeAll();
@@ -205,11 +206,8 @@ define(function (require, exports, module) {
                   
             
             $(window).on("mousemove.wsvdragging", function (e) {
-                var pageY = e.pageY;
                 $ghost.hide(); // so closest finds the actual element
-                $el.css("opacity", "");
                 $elem = $(document.elementFromPoint(e.pageX, pageY)).closest("#working-set-list-container li");
-                $el.css("opacity", ".25");
                 $ghost.show();
 
                 function drag(e) {
@@ -217,14 +215,21 @@ define(function (require, exports, module) {
                     scrollDir = 0;
 
                     if ($elem.length) {
-                        if ($elem !== $lastEl) {
+                        if ($elem !== $lastEl) { // && $elem !== $el) {
                             if ($lastEl) {
                                 $lastEl.css("background-color", "");
                             }
+                            
                             $currentContainer = $elem.parents(".open-files-container");
                             containerOffset = $currentContainer.offset();
                             $elem.css("background-color", "red");
                             $lastEl = $elem;
+                            currentIndex = MainViewManager.findInWorkingSet(currentPaneId, $elem.data(_FILE_KEY).fullPath);
+                            /*
+                            if (currentIndex < startingIndex) {
+                                
+                            } else {
+                            }*/
                         }
                     } else if (containerOffset) {
                         if (!((Math.abs(containerOffset.top - e.pageY) < 33 ||
@@ -254,7 +259,7 @@ define(function (require, exports, module) {
                     if (scrollDir) {
                         scroll($currentContainer, scrollDir, function () {
                             $ghost.hide(); // so closest finds the actual element
-                            $elem = $(document.elementFromPoint(e.pageX, pageY)).closest("#working-set-list-container li");
+                            $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
                             $ghost.show(); // so closest finds the actual element
                             drag(e);
                         });
