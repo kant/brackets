@@ -137,7 +137,7 @@ define(function (require, exports, module) {
         function scroll($el, dir, callback) {
             var el = $el[0],
                 maxScroll = el.scrollHeight - el.clientHeight;
-            if (dir && !interval) {
+            if (maxScroll && dir && !interval) {
                 // Scroll view if the mouse is over the first or last pixels of the container
                 interval = window.setInterval(function () {
                     var scrollTop = $el.scrollTop();
@@ -155,16 +155,18 @@ define(function (require, exports, module) {
 
         $el.mousedown(function (e) {
             var scrollDir = 0,
+                itemHeight = $el.height(),
                 tryClosing = $(document.elementFromPoint(e.pageX, e.pageY)).hasClass("can-close"),
                 offset = $el.offset(),
                 $copy = $el.clone(),
-//                $sourceList = $el.parent(),
                 $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>").append($("<ul>").append($copy).css("padding", "0")),
                 $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li"),
                 $sourceContainer = $elem.parents(".open-files-container"),
                 sourceContainerOffset = $sourceContainer.offset(),
                 $currentContainer = $sourceContainer,
                 currentContainerOffset = sourceContainerOffset,
+                $currentView = $currentContainer.parent(),
+                currentViewOffset = $currentView.offset(),
                 sourceView = _viewFromEl($currentContainer),
                 sourcePaneId = sourceView.paneId,
                 startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath),
@@ -205,6 +207,12 @@ define(function (require, exports, module) {
                         currentContainerOffset = $currentContainer.offset();
                         currentView = _viewFromEl($currentContainer);
                         currentPaneId = currentView.paneId;
+                        $currentView = $currentContainer.parent();
+                        currentViewOffset = $currentView.offset();
+                    }
+                    
+                    function updateCurrentContext() {
+                        switchContext($currentContainer);   
                     }
                     
                     if ($elem.length) {
@@ -221,51 +229,45 @@ define(function (require, exports, module) {
                                 // insert after
                                 $el.insertAfter($elem);
                             }
+                            updateCurrentContext();
                         }
                     } else if (hasValidContext()) {
-                        // We've wondered out of the open-files-container but we could 
-                        //  be either in the working-set-header or below the container
-                        //  in that case we're setup to scroll 
-                        var $currentView = $currentContainer.parent(),
-                            currentViewOffset = $currentView.offset();
-                        if (!((Math.abs(currentViewOffset.top - e.pageY) < 16 ||
-                                Math.abs(e.pageY - $currentView.height() + currentViewOffset.top) > 16))) {
-                        
+                        // the mouse wasn't below a list item (closest only searches up)
+                        //  so look for the drop to occur in another view 
+                        var $candidateContainer = findCLosestWorkingSetView(e).find(".open-files-container"),
+                            $candidateList = $candidateContainer.find("ul"),
+                            candidateListOffset = $candidateList.offset();
+
+                        if (e.pageY < currentViewOffset.top || e.pageY > $currentView.height() + currentViewOffset.top) {
                             // we've moved too far north or south of the 
                             //  current view so  turn off the scroll 
                             $currentContainer = currentContainerOffset = undefined;
                         }
-                    }
-                    
-                    if (!$elem.length) {
-                        // the mouse wasn't below a list item (closest only searches up)
-                        //  so look for the drop to occur in another view 
-                        var $candidateContainer = findCLosestWorkingSetView(e).find(".open-files-container"),
-                            $candidateList = $candidateContainer.find("ul");
-                        
+
                         if ($candidateContainer.length) {
                             // we've found a view to drop in to
                             if (!hasValidContext() || $candidateContainer[0] !== $currentContainer[0]) {
                                 // setup the context to drop into the 
                                 //  container of the view we've mouse over
                                 switchContext($candidateContainer);
-                                $candidateList.append($el);
                             } else {
                                 // it's the same context so figure out if it 
                                 //  needs to go to the top or bottom of the list
                                 //  this is based on if we are dragging up or down
-                                if (e.pageY < currentContainerOffset.top) {
+                                if (e.pageY >= candidateListOffset.top + $candidateList.height() - itemHeight) {
+                                    // insert the bottom of the list dragging up
+                                    $candidateList.append($el);
+                                } else {
                                     // insert at the top of the list dragging down
                                     //  e.pageY < because the mouse is above the container 
                                     $candidateList.prepend($el);
-                                } else {
-                                    // insert the bottom of the list dragging up
-                                    $candidateList.append($el);
                                 }
                             }
+                            updateCurrentContext();
                         }
                     }
-                
+
+                    
                     $ghost.css({top: e.pageY,
                                 left: offset.left});
 
@@ -275,7 +277,7 @@ define(function (require, exports, module) {
                         var topDelta = e.pageY - currentContainerOffset.top,
                             bottomDelta = e.pageY - ($currentContainer.height() + currentContainerOffset.top),
                             inRange = function (val) {
-                                return (val < 17 && val > -33);
+                                return (Math.abs(val) < itemHeight);
                             };
                         
                         if (inRange(topDelta)) {
