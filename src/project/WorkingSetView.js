@@ -153,18 +153,18 @@ define(function (require, exports, module) {
             }
         }
 
-
-        
         $el.mousedown(function (e) {
             var scrollDir = 0,
                 tryClosing = $(document.elementFromPoint(e.pageX, e.pageY)).hasClass("can-close"),
                 offset = $el.offset(),
-                $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>"),
                 $copy = $el.clone(),
-                $list = $("<ul>").append($copy).css("padding", "0").appendTo($ghost),
+//                $sourceList = $el.parent(),
+                $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>").append($("<ul>").append($copy).css("padding", "0")),
                 $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li"),
-                $currentContainer = $elem.parents(".open-files-container"),
-                containerOffset = $currentContainer.offset(),
+                $sourceContainer = $elem.parents(".open-files-container"),
+                sourceContainerOffset = $sourceContainer.offset(),
+                $currentContainer = $sourceContainer,
+                currentContainerOffset = sourceContainerOffset,
                 sourceView = _viewFromEl($currentContainer),
                 sourcePaneId = sourceView.paneId,
                 startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath),
@@ -192,16 +192,23 @@ define(function (require, exports, module) {
 
                 function drag(e) {
 
-                    var searchForContainer = false;
                     scrollDir = 0;
 
+                    function switchContext($container) {
+                        $currentContainer = $container;
+                        currentContainerOffset = $currentContainer.offset();
+                        currentView = _viewFromEl($currentContainer);
+                        currentPaneId = currentView.paneId;
+                    }
+                    
+                    function hasValidContext() {
+                        return Boolean(currentContainerOffset);
+                    }
+                    
                     if ($elem.length) {
                         if ($elem !== $el) {
                             
-                            $currentContainer = $elem.parents(".open-files-container");
-                            containerOffset = $currentContainer.offset();
-                            currentView = _viewFromEl($currentContainer);
-                            currentPaneId = currentView.paneId;
+                            switchContext($elem.parents(".open-files-container"));
 
                             if (e.pageY < $elem.offset().top) {
                                 // insert before
@@ -210,59 +217,59 @@ define(function (require, exports, module) {
                                 // insert after
                                 $el.insertAfter($elem);
                             }
-                            
-                            
                         }
-                    } else if (containerOffset) {
-                        if (!((Math.abs(containerOffset.top - e.pageY) < 33 ||
-                                Math.abs(e.pageY - $currentContainer.height() + containerOffset.top) > 33))) {
+                    } else if (hasValidContext()) {
+                        if (!((Math.abs(currentContainerOffset.top - e.pageY) < 33 ||
+                                Math.abs(e.pageY - $currentContainer.height() + currentContainerOffset.top) > 33))) {
                         
-                            $currentContainer = containerOffset = undefined;
-                        } else {
-                            searchForContainer = true;
+                            $currentContainer = currentContainerOffset = undefined;
                         }
-                    } else {
-                        searchForContainer = true;
                     }
                     
-                    if (searchForContainer) {
-                        var $candidateView = findCLosestWorkingSetView(e),
-                            $candidateContainer = $candidateView.find(".open-files-container");
+                    if (!$elem.length && hasValidContext()) {
+                        var $candidateContainer = findCLosestWorkingSetView(e).find(".open-files-container"),
+                            candidateContainerOffset = $candidateContainer.offset();
                         
                         if ($candidateContainer.length) {
-                            $currentContainer = $candidateContainer;
-                            containerOffset = $currentContainer.offset();
-                            currentView = _viewFromEl($currentContainer);
-                            currentPaneId = currentView.paneId;
-
                             var $candidateList = $currentContainer.find("ul");
-                            
-                            if (offset.top < e.pageY) {
-                                $candidateList.prepend($el);
+                            if ($candidateContainer[0] !== $sourceContainer[0]) {
+                                switchContext($candidateContainer);
+
+                                if (candidateContainerOffset.top > sourceContainerOffset.top) {
+                                    $candidateList.prepend($el);
+                                } else {
+                                    $candidateList.append($el);
+                                }
                             } else {
-                                $candidateList.append($el);
+                                if (e.pageY < $el.offset().top) {
+                                    // insert before
+                                    $candidateList.prepend($el);
+                                } else {
+                                    // insert after
+                                    $candidateList.append($el);
+                                }
                             }
                         }
                     }
                 
-                    
                     $ghost.css({top: e.pageY,
                                 left: offset.left});
 
                     scrollDir = 0;
-                    if ($currentContainer && $currentContainer.length) {
-                        var topDelta = e.pageY - containerOffset.top,
-                            bottomDelta = e.pageY - ($currentContainer.height() + containerOffset.top),
-                            inRange = function (val) {
-                                return (val < 17 && val > -33);
-                            };
-                        
-                        if (inRange(topDelta)) {
-                            scrollDir = -1;
-                        } else if (inRange(bottomDelta)) {
-                            scrollDir = 1;
-                        }
-                    }
+                    
+//                    if ($currentContainer && $currentContainer.length) {
+//                        var topDelta = e.pageY - currentContainerOffset.top,
+//                            bottomDelta = e.pageY - ($currentContainer.height() + currentContainerOffset.top),
+//                            inRange = function (val) {
+//                                return (val < 17 && val > -33);
+//                            };
+//                        
+//                        if (inRange(topDelta)) {
+//                            scrollDir = -1;
+//                        } else if (inRange(bottomDelta)) {
+//                            scrollDir = 1;
+//                        }
+//                    }
                     if (scrollDir) {
                         scroll($currentContainer, scrollDir, function () {
                             $elem = findCLosestWorkingSetItem(e);
@@ -277,8 +284,9 @@ define(function (require, exports, module) {
             });
 
             function finished() {
-                window.onmousewheel = window.document.onmousewheel = null;
                 endScroll();
+
+                window.onmousewheel = window.document.onmousewheel = null;
                 $(window).off(".wsvdragging");
                 $ghost.remove();
                 $el.css("opacity", "");
@@ -289,7 +297,7 @@ define(function (require, exports, module) {
                 
                 if (sourcePaneId === currentPaneId && startingIndex === $el.index()) {
                     // Click on close icon, or middle click anywhere - close the item without selecting it first
-                    if (tryClosing || event.which === MIDDLE_BUTTON) {
+                    if (tryClosing || exports.which === MIDDLE_BUTTON) {
                         CommandManager.execute(Commands.FILE_CLOSE, {file: $el.data(_FILE_KEY),
                                                                      paneId: sourcePaneId});
                     } else {
@@ -774,8 +782,7 @@ define(function (require, exports, module) {
      * @param {bool} canClose
      */
     WorkingSetView.prototype._updateFileStatusIcon = function (listElement, isDirty, canClose) {
-        var self = this,
-            $fileStatusIcon = listElement.find(".file-status-icon"),
+        var $fileStatusIcon = listElement.find(".file-status-icon"),
             showIcon = isDirty || canClose;
 
         // remove icon if its not needed
