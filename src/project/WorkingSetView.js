@@ -255,11 +255,11 @@ define(function (require, exports, module) {
                                 //  needs to go to the top or bottom of the list
                                 //  this is based on if we are dragging up or down
                                 if (e.pageY < currentContainerOffset.top) {
-                                    // insert at the top of the list dragging up
+                                    // insert at the top of the list dragging down
+                                    //  e.pageY < because the mouse is above the container 
                                     $candidateList.prepend($el);
                                 } else {
-                                    // insert the bottom of the list dragging down
-                                    //  this handles the case of dragging down into an empty list
+                                    // insert the bottom of the list dragging up
                                     $candidateList.append($el);
                                 }
                             }
