@@ -188,11 +188,17 @@ define(function (require, exports, module) {
             }
             
             $(window).on("mousemove.wsvdragging", function (e) {
+                // to to find an ListItem to insert next to
                 $elem = findCLosestWorkingSetItem(e);
 
                 function drag(e) {
 
                     scrollDir = 0;
+                    
+                    function hasValidContext() {
+                        return Boolean(currentContainerOffset);
+                    }
+                    
 
                     function switchContext($container) {
                         $currentContainer = $container;
@@ -201,15 +207,13 @@ define(function (require, exports, module) {
                         currentPaneId = currentView.paneId;
                     }
                     
-                    function hasValidContext() {
-                        return Boolean(currentContainerOffset);
-                    }
-                    
                     if ($elem.length) {
                         if ($elem !== $el) {
-                            
+                            // setup the context to drop in the view 
+                            //  where the element lives 
                             switchContext($elem.parents(".open-files-container"));
 
+                            // figure out if the drag was above or below the ListItem
                             if (e.pageY < $elem.offset().top) {
                                 // insert before
                                 $el.insertBefore($elem);
@@ -219,35 +223,43 @@ define(function (require, exports, module) {
                             }
                         }
                     } else if (hasValidContext()) {
+                        // We've wondered out of the open-files-container but we could 
+                        //  be either in the working-set-header or below the container
+                        //  in that case we're setup to scroll 
                         var $currentView = $currentContainer.parent(),
                             currentViewOffset = $currentView.offset();
                         if (!((Math.abs(currentViewOffset.top - e.pageY) < 16 ||
                                 Math.abs(e.pageY - $currentView.height() + currentViewOffset.top) > 16))) {
                         
+                            // we've moved too far north or south of the 
+                            //  current view so  turn off the scroll 
                             $currentContainer = currentContainerOffset = undefined;
                         }
                     }
                     
                     if (!$elem.length) {
+                        // the mouse wasn't below a list item (closest only searches up)
+                        //  so look for the drop to occur in another view 
                         var $candidateContainer = findCLosestWorkingSetView(e).find(".open-files-container"),
-                            candidateContainerOffset = $candidateContainer.offset();
+                            $candidateList = $candidateContainer.find("ul");
                         
                         if ($candidateContainer.length) {
-                            var $candidateList = $candidateContainer.find("ul");
+                            // we've found a view to drop in to
                             if (!hasValidContext() || $candidateContainer[0] !== $currentContainer[0]) {
+                                // setup the context to drop into the 
+                                //  container of the view we've mouse over
                                 switchContext($candidateContainer);
-
-                                if (candidateContainerOffset.top > currentContainerOffset.top) {
-                                    $candidateList.prepend($el);
-                                } else {
-                                    $candidateList.append($el);
-                                }
+                                $candidateList.append($el);
                             } else {
-                                if (e.pageY < $el.offset().top) {
-                                    // insert before
+                                // it's the same context so figure out if it 
+                                //  needs to go to the top or bottom of the list
+                                //  this is based on if we are dragging up or down
+                                if (e.pageY < currentContainerOffset.top) {
+                                    // insert at the top of the list dragging up
                                     $candidateList.prepend($el);
                                 } else {
-                                    // insert after
+                                    // insert the bottom of the list dragging down
+                                    //  this handles the case of dragging down into an empty list
                                     $candidateList.append($el);
                                 }
                             }
