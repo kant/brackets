@@ -219,23 +219,25 @@ define(function (require, exports, module) {
                             }
                         }
                     } else if (hasValidContext()) {
-                        if (!((Math.abs(currentContainerOffset.top - e.pageY) < 33 ||
-                                Math.abs(e.pageY - $currentContainer.height() + currentContainerOffset.top) > 33))) {
+                        var $currentView = $currentContainer.parent(),
+                            currentViewOffset = $currentView.offset();
+                        if (!((Math.abs(currentViewOffset.top - e.pageY) < 16 ||
+                                Math.abs(e.pageY - $currentView.height() + currentViewOffset.top) > 16))) {
                         
                             $currentContainer = currentContainerOffset = undefined;
                         }
                     }
                     
-                    if (!$elem.length && hasValidContext()) {
+                    if (!$elem.length) {
                         var $candidateContainer = findCLosestWorkingSetView(e).find(".open-files-container"),
                             candidateContainerOffset = $candidateContainer.offset();
                         
                         if ($candidateContainer.length) {
-                            var $candidateList = $currentContainer.find("ul");
-                            if ($candidateContainer[0] !== $sourceContainer[0]) {
+                            var $candidateList = $candidateContainer.find("ul");
+                            if (!hasValidContext() || $candidateContainer[0] !== $currentContainer[0]) {
                                 switchContext($candidateContainer);
 
-                                if (candidateContainerOffset.top > sourceContainerOffset.top) {
+                                if (candidateContainerOffset.top > currentContainerOffset.top) {
                                     $candidateList.prepend($el);
                                 } else {
                                     $candidateList.append($el);
@@ -257,19 +259,19 @@ define(function (require, exports, module) {
 
                     scrollDir = 0;
                     
-//                    if ($currentContainer && $currentContainer.length) {
-//                        var topDelta = e.pageY - currentContainerOffset.top,
-//                            bottomDelta = e.pageY - ($currentContainer.height() + currentContainerOffset.top),
-//                            inRange = function (val) {
-//                                return (val < 17 && val > -33);
-//                            };
-//                        
-//                        if (inRange(topDelta)) {
-//                            scrollDir = -1;
-//                        } else if (inRange(bottomDelta)) {
-//                            scrollDir = 1;
-//                        }
-//                    }
+                    if ($currentContainer && $currentContainer.length) {
+                        var topDelta = e.pageY - currentContainerOffset.top,
+                            bottomDelta = e.pageY - ($currentContainer.height() + currentContainerOffset.top),
+                            inRange = function (val) {
+                                return (val < 17 && val > -33);
+                            };
+                        
+                        if (inRange(topDelta)) {
+                            scrollDir = -1;
+                        } else if (inRange(bottomDelta)) {
+                            scrollDir = 1;
+                        }
+                    }
                     if (scrollDir) {
                         scroll($currentContainer, scrollDir, function () {
                             $elem = findCLosestWorkingSetItem(e);
