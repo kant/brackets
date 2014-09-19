@@ -164,6 +164,10 @@ define(function (require, exports, module) {
         paneTemplate        = require("text!htmlContent/pane.html");
     
     
+    function _makeIndexRequestObject(requestIndex, index) {
+        return {indexRequested: requestIndex, index: index};
+    }
+    
     /**
      * @typedef {!$el: jQuery, getFile:function():!File, updateLayout:function(forceRefresh:boolean), destroy:function(),  getScrollPos:function():?,  adjustScrollPos:function(state:Object=, heightDelta:number)=, getViewState:function():?*=, restoreViewState:function(viewState:!*)=, notifyContainerChange:function()=, notifyVisibilityChange:function(boolean)=} View
      */
@@ -389,6 +393,9 @@ define(function (require, exports, module) {
         this._viewList.splice(this.findInViewList(file.fullPath), 1);
         this._viewListMRUOrder.splice(this.findInViewListMRUOrder(file.fullPath), 1);
         this._viewListAddedOrder.splice(this.findInViewListAddedOrder(file.fullPath), 1);
+
+        // insert the view into the working set
+        destination._addToViewList(file,  _makeIndexRequestObject(true, destinationIndex));
         
         //move the view,
         var view = this._views[file.fullPath];
@@ -397,8 +404,6 @@ define(function (require, exports, module) {
         if (view) {
             destination.addView(view, !destination.getCurrentlyViewedFile());
         }
-        
-        destination._addToViewList(file, destinationIndex);
     };
     
     /**
@@ -620,7 +625,7 @@ define(function (require, exports, module) {
     Pane.prototype.addToViewList = function (file, index) {
         var indexRequested = (index !== undefined && index !== null && index >= 0 && index < this._viewList.length);
 
-        this._addToViewList(file, {indexRequested: indexRequested, index: index});
+        this._addToViewList(file, _makeIndexRequestObject(indexRequested, index));
         
         if (!indexRequested) {
             index = this._viewList.length - 1;

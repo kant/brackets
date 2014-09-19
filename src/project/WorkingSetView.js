@@ -192,6 +192,7 @@ define(function (require, exports, module) {
 
                 function drag(e) {
 
+                    var searchForContainer = false;
                     scrollDir = 0;
 
                     if ($elem.length) {
@@ -218,19 +219,33 @@ define(function (require, exports, module) {
                         
                             $currentContainer = containerOffset = undefined;
                         } else {
-                            var $candidateView = findCLosestWorkingSetView(e),
-                                $candidateContainer = $candidateView.find(".open-files-container");
-                            if ($candidateContainer.length) {
-                                $currentContainer = $candidateContainer;
-                                containerOffset = $currentContainer.offset();
-                                currentView = _viewFromEl($currentContainer);
-                                currentPaneId = currentView.paneId;
+                            searchForContainer = true;
+                        }
+                    } else {
+                        searchForContainer = true;
+                    }
+                    
+                    if (searchForContainer) {
+                        var $candidateView = findCLosestWorkingSetView(e),
+                            $candidateContainer = $candidateView.find(".open-files-container");
+                        
+                        if ($candidateContainer.length) {
+                            $currentContainer = $candidateContainer;
+                            containerOffset = $currentContainer.offset();
+                            currentView = _viewFromEl($currentContainer);
+                            currentPaneId = currentView.paneId;
 
-                                $currentContainer.find("ul").prepend($el);
+                            var $candidateList = $currentContainer.find("ul");
+                            
+                            if (offset.top < e.pageY) {
+                                $candidateList.prepend($el);
+                            } else {
+                                $candidateList.append($el);
                             }
                         }
                     }
-
+                
+                    
                     $ghost.css({top: e.pageY,
                                 left: offset.left});
 
