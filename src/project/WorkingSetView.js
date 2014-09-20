@@ -172,6 +172,7 @@ define(function (require, exports, module) {
                 sourceView = _viewFromEl($currentContainer),
                 sourcePaneId = sourceView.paneId,
                 startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath),
+                selectedIndex = $currentView.find("li.selected").index(),
                 currentView = sourceView,
                 currentPaneId = sourcePaneId;
 
@@ -208,14 +209,25 @@ define(function (require, exports, module) {
                     
                     function updateCurrentContext() {
                         currentContainerOffset = $currentContainer.offset();
+                        currentViewOffset = $currentView.offset();
+                        var index = $currentView.find("li.selected").index();
+                        if (index !== selectedIndex) {
+                            currentView._fireSelectionChanged();
+                            selectedIndex = index;
+                        }
+                    }
+
+                    function switchContext($container) {
+                        if (hasValidContext()) {
+                            updateCurrentContext();
+                        }
+                        
+                        // just set the container and update
+                        $currentContainer = $container;
                         currentView = _viewFromEl($currentContainer);
                         currentPaneId = currentView.paneId;
                         $currentView = $currentContainer.parent();
-                        currentViewOffset = $currentView.offset();
-                    }                    
-
-                    function switchContext($container) {
-                        $currentContainer = $container;
+                        selectedIndex = $currentView.find("li.selected").index();
                         updateCurrentContext();
                     }
                     
@@ -282,6 +294,7 @@ define(function (require, exports, module) {
                     //  the top or bottom and start scrolling
                     scrollDir = 0;
                     
+                    // see if we're in range to scroll
                     if ($currentContainer && $currentContainer.length) {
                         var topDelta = e.pageY - currentContainerOffset.top,
                             bottomDelta = e.pageY - ($currentContainer.height() + currentContainerOffset.top),
@@ -295,7 +308,9 @@ define(function (require, exports, module) {
                             scrollDir = 1;
                         }
                     }
+                    
                     if (scrollDir) {
+                        // we're in range to scroll
                         scroll($currentContainer, scrollDir, function () {
                             // as we scroll, recompute the element 
                             //  to insert before/after and drag it 
@@ -318,6 +333,7 @@ define(function (require, exports, module) {
                 }
             });
 
+            // cleanup
             function finished() {
                 endScroll();
 
