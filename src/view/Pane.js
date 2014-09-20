@@ -161,6 +161,7 @@ define(function (require, exports, module) {
         Commands            = require("command/Commands"),
         Strings             = require("strings"),
         ViewUtils           = require("utils/ViewUtils"),
+        ProjectManager      = require("project/ProjectManager"),
         paneTemplate        = require("text!htmlContent/pane.html");
     
     
@@ -241,12 +242,17 @@ define(function (require, exports, module) {
             }
         });
 
-        this._updateHeaderText();
+        this.updateHeaderText();
 
         // Listen to document events so we can update ourself
         $(DocumentManager).on(this._makeEventName("fileNameChange"),  _.bind(this._handleFileNameChange, this));
         $(DocumentManager).on(this._makeEventName("pathDeleted"), _.bind(this._handleFileDeleted, this));
         $(MainViewManager).on(this._makeEventName("activePaneChange"), _.bind(this._handleActivePaneChange, this));
+        $(MainViewManager).on(this._makeEventName("workingSetAdd"), _.bind(this.updateHeaderText, this));
+        $(MainViewManager).on(this._makeEventName("workingSetRemove"), _.bind(this.updateHeaderText, this));
+        $(MainViewManager).on(this._makeEventName("workingSetAddList"), _.bind(this.updateHeaderText, this));
+        $(MainViewManager).on(this._makeEventName("workingSetRemoveList"), _.bind(this.updateHeaderText, this));
+        
     }
 
     /**
@@ -655,8 +661,13 @@ define(function (require, exports, module) {
         return uniqueFileList;
     };
     
+    /**
+     * Dispatches a currentViewChange event
+     * @param {?View} newView - the view become the current view
+     * @param {?View} oldView - the view being replaced
+     */
     Pane.prototype._notifyCurrentViewChange = function (newView, oldView) {
-        this._updateHeaderText();
+        this.updateHeaderText();
         
         $(this).triggerHandler("currentViewChange", [newView, oldView]);
     };
@@ -782,10 +793,21 @@ define(function (require, exports, module) {
      * Updates text in pane header
      * @private
      */
-    Pane.prototype._updateHeaderText = function () {
-        var file = this.getCurrentlyViewedFile();
+    Pane.prototype.updateHeaderText = function () {
+        var file = this.getCurrentlyViewedFile(),
+            files,
+            displayName;
+        
         if (file) {
-            this.$header.text(file.name);
+            files = MainViewManager.getAllOpenFiles().filter(function (item) {
+                return (item.name === file.name);
+            });
+            if (files.length < 2) {
+                this.$header.text(file.name);
+            } else {
+                displayName = ProjectManager.makeProjectRelativeIfPossible(file.fullPath);
+                this.$header.text(displayName);
+            }
         } else {
             this.$header.html(Strings.EMPTY_VIEW_HEADER);
         }
@@ -814,7 +836,7 @@ define(function (require, exports, module) {
             delete this._views[oldname];
         }
         
-        this._updateHeaderText();
+        this.updateHeaderText();
         
         // dispatch the change event
         if (dispatchEvent) {
