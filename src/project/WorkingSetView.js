@@ -104,13 +104,22 @@ define(function (require, exports, module) {
     }
     
     
+    /** 
+     * Suppresses redraw sorting for all views
+     * @private
+     * @param {boolean} suppress - true suppress, false to allow sort redrawing
+     */
     function _suppressSortRedrawForAllViews(suppress) {
         _.forEach(_views, function (view) {
             view.suppressSortRedraw = suppress;
         });
     }
     
-        
+    /** 
+     * Finds the WorkingsetView object for the specified element
+     * @private
+     * @param {jQuery} $el - the element to find the view for
+     */
     function _viewFromEl($el) {
         if (!$el.hasClass("working-set-view")) {
             $el = $el.parents(".working-set-view");
@@ -121,11 +130,14 @@ define(function (require, exports, module) {
         });
     }
     
-    
+    /** 
+     * Makes the specified element draggable
+     * @private
+     * @param {jQuery} $el - the element to make draggable
+     */
     function _makeDraggable($el) {
         var interval,
             sorceFile = $el.data(_FILE_KEY);
-
 
         function endScroll() {
             if (interval) {
@@ -176,7 +188,6 @@ define(function (require, exports, module) {
                 currentView = sourceView,
                 currentPaneId = sourcePaneId;
 
-            
             function findClosest(e, selector) {
                 var $result;
                 $ghost.hide(); // we don't want elementFromPoint picking up the ghost
@@ -205,7 +216,6 @@ define(function (require, exports, module) {
                     function hasValidContext() {
                         return Boolean(currentContainerOffset);
                     }
-                    
                     
                     function updateCurrentContext() {
                         currentContainerOffset = $currentContainer.offset();
@@ -333,8 +343,7 @@ define(function (require, exports, module) {
                 }
             });
 
-            // cleanup
-            function finished() {
+            function cleanup() {
                 endScroll();
 
                 window.onmousewheel = window.document.onmousewheel = null;
@@ -343,8 +352,8 @@ define(function (require, exports, module) {
                 $el.css("opacity", "");
             }
             
-            $(window).on("mouseup.wsvdragging", function (e) {
-                finished();
+            function drop() {
+                cleanup();
                 
                 if (sourcePaneId === currentPaneId && startingIndex === $el.index()) {
                     // Click on close icon, or middle click anywhere - close the item without selecting it first
@@ -357,7 +366,6 @@ define(function (require, exports, module) {
                                                                  FileViewController.WORKING_SET_VIEW,
                                                                  sourcePaneId);
                     }
-            
                 } else if (sourcePaneId === currentPaneId) {
                     MainViewManager._moveWorkingSetItem(sourcePaneId, startingIndex, $el.index());
                     currentView._rebuildViewList();
@@ -367,18 +375,20 @@ define(function (require, exports, module) {
                 }
 
                 _suppressSortRedrawForAllViews(false);
+            }
 
+            $(window).on("mouseup.wsvdragging", function (e) {
+                drop();
             });
             
             $(window).on("keydown.wsvdragging", function (e) {
                 if (e.keyCode === KeyEvent.DOM_VK_ESCAPE) {
-                    finished();
+                    cleanup();
                     exports.refresh(true);
                     e.stopPropagation();
                 }
                 _suppressSortRedrawForAllViews(false);
             });
-            
             
             window.onmousewheel = window.document.onmousewheel = function (e) {
                 e.preventDefault();
@@ -387,6 +397,12 @@ define(function (require, exports, module) {
             // close all menus, and disable sorting 
             Menus.closeAll();
             _suppressSortRedrawForAllViews(true);
+
+            // on Mac, end the drop in other cases
+            if (e.which !== LEFT_BUTTON || (e.ctrlKey && brackets.platform === "mac")) {
+                drop();
+                return;
+            }
             
             // setup our ghost element as position absolute
             //  so we can put it wherever we want to while dragging
@@ -623,209 +639,6 @@ define(function (require, exports, module) {
      */
     WorkingSetView.prototype._handleActivePaneChange = function () {
         this._redraw();
-    };
-    
-    /**
-     * Starts the drag and drop working set view reorder.
-     * @private
-     * @param {!Event} event - jQuery event
-     * @param {!HTMLLIElement} $listItem - jQuery element
-     * @param {?bool} fromClose - true if reorder was called from the close icon
-     */
-    WorkingSetView.prototype._reorderListItem = function (event, $listItem, fromClose) {
-        var self            = this,
-            $prevListItem   = $listItem.prev(),
-            $nextListItem   = $listItem.next(),
-            selected        = $listItem.hasClass("selected"),
-            prevSelected    = $prevListItem.hasClass("selected"),
-            nextSelected    = $nextListItem.hasClass("selected"),
-            index           = MainViewManager.findInWorkingSet(self.paneId, $listItem.data(_FILE_KEY).fullPath),
-            height          = $listItem.height(),
-            startPageY      = event.pageY,
-            listItemTop     = startPageY - $listItem.offset().top,
-            listItemBottom  = $listItem.offset().top + height - startPageY,
-            offsetTop       = this.$openFilesContainer.offset().top,
-            scrollElement   = this.$openFilesContainer.get(0),
-            containerHeight = scrollElement.clientHeight,
-            maxScroll       = scrollElement.scrollHeight - containerHeight,
-            hasScroll       = scrollElement.scrollHeight > containerHeight,
-            hasBottomShadow = scrollElement.scrollHeight > scrollElement.scrollTop + containerHeight,
-            addBottomShadow = false,
-            interval        = false,
-            moved           = false;
-        
-        // Don't redraw the working set for the next events
-        self.suppressSortRedraw = true;
-        
-        function drag(e) {
-            var top = e.pageY - startPageY;
-            
-            // Drag if the item is not the first and moving it up or
-            // if the item is not the last and moving down
-            if (($prevListItem.length && top < 0) || ($nextListItem.length && top > 0)) {
-                // Reorder the list once the item is halfway to the new position
-                if (Math.abs(top) > height / 2) {
-                    // If moving up, place the previows item after the moving item
-                    if (top < 0) {
-                        $prevListItem.insertAfter($listItem);
-                        startPageY -= height;
-                        top = top + height;
-                        MainViewManager._swapWorkingSetListIndexes(self.paneId, index, --index);
-                    // If moving down, place the next item before the moving item
-                    } else {
-                        $nextListItem.insertBefore($listItem);
-                        startPageY += height;
-                        top = top - height;
-                        MainViewManager._swapWorkingSetListIndexes(self.paneId, index, ++index);
-                    }
-                    
-                    // Update the selection when the previows or next element were selected
-                    if (!selected && ((top > 0 && prevSelected) || (top < 0 && nextSelected))) {
-                        self._fireSelectionChanged();
-                    }
-                    
-                    // Update the previows and next items
-                    $prevListItem = $listItem.prev();
-                    $nextListItem = $listItem.next();
-                    prevSelected  = $prevListItem.hasClass("selected");
-                    nextSelected  = $nextListItem.hasClass("selected");
-
-                    // If the last item of the list was selected and the previows was moved to its location, then
-                    // the it will show a bottom shadow even if it shouldnt because of the way the scrollHeight is 
-                    // handle with relative position. This will remove that shadow and add it on drop. 
-                    if (!addBottomShadow && !hasBottomShadow && !$nextListItem.length && prevSelected) {
-                        ViewUtils.removeScrollerShadow(self.$openFilesContainer[0], null);
-                        ViewUtils.addScrollerShadow(self.$openFilesContainer[0], null, false);
-                        addBottomShadow = true;
-                    }
-                }
-            // Set the top to 0 as the event probably didnt fired at the exact start/end of the list 
-            } else {
-                top = 0;
-            }
-            
-            // Move the item
-            $listItem.css("top", top + "px");
-            
-            // Update the selection position
-            if (selected) {
-                self._fireSelectionChanged();
-            }
-            
-            // Once the movement is greater than 3 pixels, it is assumed that the user wantes to reorder files and not open
-            if (!moved && Math.abs(top) > 3) {
-                Menus.closeAll();
-                moved = true;
-                
-                // Don't redraw the working set for the next events
-                self.suppressSortRedraw = true;
-            }
-        }
-        
-        function endScroll() {
-            window.clearInterval(interval);
-            interval = false;
-        }
-        
-        function scroll(e) {
-            var dir = 0;
-            // Mouse over the first visible pixels and moving up
-            if (e.pageY - listItemTop < offsetTop + 7) {
-                dir = -1;
-            // Mouse over the last visible pixels and moving down
-            } else if (e.pageY + listItemBottom > offsetTop + containerHeight - 7) {
-                dir = 1;
-            }
-            
-            if (dir && !interval) {
-                // Scroll view if the mouse is over the first or last pixels of the container
-                interval = window.setInterval(function () {
-                    var scrollTop = self.$openFilesContainer.scrollTop();
-                    // End scroll if there isn't more to scroll
-                    if ((dir === -1 && scrollTop <= 0) || (dir === 1 && scrollTop >= maxScroll)) {
-                        endScroll();
-                    // Scroll and drag list item
-                    } else {
-                        self.$openFilesContainer.scrollTop(scrollTop + 7 * dir);
-                        startPageY -= 7 * dir;
-                        drag(e);
-                    }
-                }, 100);
-            } else if (!dir && interval) {
-                endScroll();
-            }
-        }
-        
-        function drop() {
-            // Enable Mousewheel
-            window.onmousewheel = window.document.onmousewheel = null;
-            
-            // Removes the styles, placing the item in the chosen place
-            $listItem.removeAttr("style");
-            
-            // End the scrolling if needed
-            if (interval) {
-                window.clearInterval(interval);
-            }
-            
-            // If item wasn't dragged, treat as a click
-            if (!moved) {
-                // Click on close icon, or middle click anywhere - close the item without selecting it first
-                if (fromClose || event.which === MIDDLE_BUTTON) {
-                    CommandManager.execute(Commands.FILE_CLOSE, {file: $listItem.data(_FILE_KEY),
-                                                                 paneId: self.paneId});
-                } else {
-                    // Normal right and left click - select the item
-                    FileViewController.openAndSelectDocument($listItem.data(_FILE_KEY).fullPath,
-                                                             FileViewController.WORKING_SET_VIEW,
-                                                             self.paneId);
-                }
-            
-            } else {
-                // Update the file selection
-                if (selected) {
-                    self._fireSelectionChanged();
-                    ViewUtils.scrollElementIntoView(self.$openFilesContainer, $listItem, false);
-                }
-                
-                // Restore the shadow
-                if (addBottomShadow) {
-                    ViewUtils.addScrollerShadow(self.$openFilesContainer[0], null, true);
-                }
-            }
-            // The drag is done, so set back to the default
-            self.suppressSortRedraw = false;
-        }
-        
-        
-        // Only drag with the left mouse button, and control key is not down
-        // on Mac, end the drop in other cases
-        if (event.which !== LEFT_BUTTON || (event.ctrlKey && brackets.platform === "mac")) {
-            drop();
-            return;
-        }
-        
-        // Disable Mousewheel while dragging
-        window.onmousewheel = window.document.onmousewheel = function (e) {
-            e.preventDefault();
-        };
-        
-        // Style the element
-        $listItem.css("position", "relative").css("z-index", 1);
-        
-        var $holder = $(window);
-        
-        // Event Handlers
-        $holder.on(self._makeEventName("mousemove"), function (e) {
-            if (hasScroll) {
-                scroll(e);
-            }
-            drag(e);
-        });
-        $holder.on(self._makeEventName("mouseup"), function (e) {
-            $holder.off(self._makeEventName(""));
-            drop();
-        });
     };
     
     /** 
