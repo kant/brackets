@@ -175,20 +175,21 @@ define(function (require, exports, module) {
                 currentView = sourceView,
                 currentPaneId = sourcePaneId;
 
-            function findCLosestWorkingSetItem(e) {
+            
+            function findClosest(e, selector) {
                 var $result;
                 $ghost.hide(); // we don't want elementFromPoint picking up the ghost
-                $result = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li");
+                $result = $(document.elementFromPoint(e.pageX, e.pageY)).closest(selector);
                 $ghost.show();
                 return $result;
             }
             
+            function findCLosestWorkingSetItem(e) {
+                return findClosest(e, "#working-set-list-container li");
+            }
+            
             function findCLosestWorkingSetView(e) {
-                var $result;
-                $ghost.hide(); // we don't want elementFromPoint picking up the ghost
-                $result = $(document.elementFromPoint(e.pageX, e.pageY)).closest(".working-set-view");
-                $ghost.show();
-                return $result;
+                return findClosest(e, ".working-set-view");
             }
             
             $(window).on("mousemove.wsvdragging", function (e) {
@@ -204,18 +205,18 @@ define(function (require, exports, module) {
                         return Boolean(currentContainerOffset);
                     }
                     
-
-                    function switchContext($container) {
-                        $currentContainer = $container;
+                    
+                    function updateCurrentContext() {
                         currentContainerOffset = $currentContainer.offset();
                         currentView = _viewFromEl($currentContainer);
                         currentPaneId = currentView.paneId;
                         $currentView = $currentContainer.parent();
                         currentViewOffset = $currentView.offset();
-                    }
-                    
-                    function updateCurrentContext() {
-                        switchContext($currentContainer);   
+                    }                    
+
+                    function switchContext($container) {
+                        $currentContainer = $container;
+                        updateCurrentContext();
                     }
                     
                     if ($elem.length) {
@@ -232,6 +233,8 @@ define(function (require, exports, module) {
                                 // insert after
                                 $el.insertAfter($elem);
                             }
+                            // anytime we change the size/placement of containers
+                            //  we need to update the context
                             updateCurrentContext();
                         }
                     } else if (hasValidContext()) {
@@ -258,22 +261,25 @@ define(function (require, exports, module) {
                                 //  needs to go to the top or bottom of the list
                                 //  this is based on if we are dragging up or down
                                 if (e.pageY >= candidateListOffset.top + $candidateList.height() - itemHeight) {
-                                    // insert the bottom of the list dragging up
+                                    // insert to the bottom of the list dragging up
                                     $candidateList.append($el);
                                 } else {
                                     // insert at the top of the list dragging down
-                                    //  e.pageY < because the mouse is above the container 
                                     $candidateList.prepend($el);
                                 }
                             }
+                            // anytime we change the size/placement of containers
+                            //  we need to update the context
                             updateCurrentContext();
                         }
                     }
 
-                    
+                    // move the dragging affordance
                     $ghost.css({top: e.pageY,
                                 left: offset.left});
 
+                    // see if we're inside a list that needs near
+                    //  the top or bottom and start scrolling
                     scrollDir = 0;
                     
                     if ($currentContainer && $currentContainer.length) {
@@ -291,13 +297,22 @@ define(function (require, exports, module) {
                     }
                     if (scrollDir) {
                         scroll($currentContainer, scrollDir, function () {
+                            // as we scroll, recompute the element 
+                            //  to insert before/after and drag it 
+                            //  in to place
                             $elem = findCLosestWorkingSetItem(e);
                             drag(e);
                         });
                     } else {
+                        // we've either moved away from the top/bottom "scrollMe" region
+                        //  or there isn't a valid container anymore so stop scrolling
                         endScroll();
                     }
                 }
+                
+                // if we have't started dragging yet then we wait until
+                //  the mouse has moved 3 pixes before we start dragging
+                //  to avoid the item moving when clicked or double clicked
                 if (dragging || Math.abs(e.pageY - startPageY) > 3) {
                     drag(e);
                 }
