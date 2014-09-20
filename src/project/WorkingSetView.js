@@ -155,6 +155,8 @@ define(function (require, exports, module) {
 
         $el.mousedown(function (e) {
             var scrollDir = 0,
+                dragging = false,
+                startPageY = e.pageY,
                 itemHeight = $el.height(),
                 tryClosing = $(document.elementFromPoint(e.pageX, e.pageY)).hasClass("can-close"),
                 offset = $el.offset(),
@@ -195,6 +197,7 @@ define(function (require, exports, module) {
 
                 function drag(e) {
 
+                    dragging = true;
                     scrollDir = 0;
                     
                     function hasValidContext() {
@@ -295,8 +298,9 @@ define(function (require, exports, module) {
                         endScroll();
                     }
                 }
-                drag(e);
-                
+                if (dragging || Math.abs(e.pageY - startPageY) > 3) {
+                    drag(e);
+                }
             });
 
             function finished() {
@@ -348,20 +352,23 @@ define(function (require, exports, module) {
             window.onmousewheel = window.document.onmousewheel = function (e) {
                 e.preventDefault();
             };
-            
+
+            // close all menus, and disable sorting 
             Menus.closeAll();
-    
             _suppressSortRedrawForAllViews(true);
             
+            // setup our ghost element as position absolute
+            //  so we can put it wherever we want to while dragging
             $ghost.css({position: "absolute",
                             top: offset.top,
                             left: offset.left});
             
             $copy.removeClass("can-close");
-            
-            $el.css("opacity", ".25");
 
-            $ghost.appendTo($("#working-set-list-container"));
+            // this will give the element the appearence that it's ghosted if the user
+            //  drags the element out of the view and goes off into no mans land
+            $el.css("opacity", ".25");
+            $ghost.appendTo($("body"));//($("#working-set-list-container"));
         });
     }
     
