@@ -139,13 +139,21 @@ define(function (require, exports, module) {
         var interval,
             sorceFile = $el.data(_FILE_KEY);
 
+        // turn off the "hover-scroll" 
         function endScroll() {
             if (interval) {
                 window.clearInterval(interval);
                 interval = undefined;
             }
         }
-        
+
+        //  We scroll the list while hovering over the first or last visible list element
+        //  in the working set, so that positioning a working set item before or after one
+        //  that has been hidden can be performed.
+        // 
+        //  This function will call the drag interface repeatedly on an interval to allow
+        //  the item to be dragged while scrolling the list until the mouse is moved off 
+        //  the first or last item and end scroll is called
         function scroll($el, dir, callback) {
             var el = $el[0],
                 maxScroll = el.scrollHeight - el.clientHeight;
@@ -165,9 +173,10 @@ define(function (require, exports, module) {
             }
         }
 
+        // The mouse down handler pretty much handles everything
         $el.mousedown(function (e) {
             var scrollDir = 0,
-                dragging = false,
+                dragged = false,
                 startPageY = e.pageY,
                 itemHeight = $el.height(),
                 tryClosing = $(document.elementFromPoint(e.pageX, e.pageY)).hasClass("can-close"),
@@ -210,7 +219,7 @@ define(function (require, exports, module) {
 
                 function drag(e) {
 
-                    dragging = true;
+                    dragged = true;
                     scrollDir = 0;
                     
                     function hasValidContext() {
@@ -221,6 +230,8 @@ define(function (require, exports, module) {
                         currentContainerOffset = $currentContainer.offset();
                         currentViewOffset = $currentView.offset();
                         var index = $currentView.find("li.selected").index();
+                        // if the selected changes position in the list
+                        //  then fire a selection 
                         if (index !== selectedIndex) {
                             currentView._fireSelectionChanged();
                             selectedIndex = index;
@@ -241,6 +252,7 @@ define(function (require, exports, module) {
                         updateCurrentContext();
                     }
                     
+                    // there was a neighboring list item to insert before or after
                     if ($elem.length) {
                         if ($elem !== $el) {
                             // setup the context to drop in the view 
@@ -273,15 +285,15 @@ define(function (require, exports, module) {
                         }
 
                         if ($candidateContainer.length) {
-                            // we've found a view to drop in to
+                            // we've found a new view to drop in to
                             if (!hasValidContext() || $candidateContainer[0] !== $currentContainer[0]) {
                                 // setup the context to drop into the 
                                 //  container of the view we've mouse over
                                 switchContext($candidateContainer);
                             } else {
-                                // it's the same context so figure out if it 
-                                //  needs to go to the top or bottom of the list
-                                //  this is based on if we are dragging up or down
+                                // it's the same view as before so figure out if we 
+                                //  need to drop at the top or bottom of the list
+                                //  based on if we are dragging up or down
                                 if (e.pageY >= candidateListOffset.top + $candidateList.height() - itemHeight) {
                                     // insert to the bottom of the list dragging up
                                     $candidateList.append($el);
@@ -300,7 +312,7 @@ define(function (require, exports, module) {
                     $ghost.css({top: e.pageY,
                                 left: offset.left});
 
-                    // see if we're inside a list that needs near
+                    // see if we're inside a list near
                     //  the top or bottom and start scrolling
                     scrollDir = 0;
                     
@@ -336,60 +348,69 @@ define(function (require, exports, module) {
                 }
                 
                 // if we have't started dragging yet then we wait until
-                //  the mouse has moved 3 pixes before we start dragging
+                //  the mouse has moved 3 pixels before we start dragging
                 //  to avoid the item moving when clicked or double clicked
-                if (dragging || Math.abs(e.pageY - startPageY) > 3) {
+                if (dragged || Math.abs(e.pageY - startPageY) > 3) {
                     drag(e);
                 }
             });
 
+            // Close down the drag operation
             function cleanup() {
                 endScroll();
-
+                // turn scroll wheel back on
                 window.onmousewheel = window.document.onmousewheel = null;
                 $(window).off(".wsvdragging");
                 $ghost.remove();
                 $el.css("opacity", "");
             }
             
+            // Drop
             function drop() {
                 cleanup();
-                
+                // didn't change position or working set
                 if (sourcePaneId === currentPaneId && startingIndex === $el.index()) {
-                    // Click on close icon, or middle click anywhere - close the item without selecting it first
-                    if (tryClosing || exports.which === MIDDLE_BUTTON) {
-                        CommandManager.execute(Commands.FILE_CLOSE, {file: $el.data(_FILE_KEY),
-                                                                     paneId: sourcePaneId});
-                    } else {
-                        // Normal right and left click - select the item
-                        FileViewController.openAndSelectDocument($el.data(_FILE_KEY).fullPath,
-                                                                 FileViewController.WORKING_SET_VIEW,
-                                                                 sourcePaneId);
+                    // if the item was dragged but not moved then don't open or close 
+                    if (!dragged) {
+                        // Click on close icon, or middle click anywhere - close the item without selecting it first
+                        if (tryClosing || exports.which === MIDDLE_BUTTON) {
+                            CommandManager.execute(Commands.FILE_CLOSE, {file: $el.data(_FILE_KEY),
+                                                                         paneId: sourcePaneId});
+                        } else {
+                            // Normal right and left click - select the item
+                            FileViewController.openAndSelectDocument($el.data(_FILE_KEY).fullPath,
+                                                                     FileViewController.WORKING_SET_VIEW,
+                                                                     sourcePaneId);
+                        }
                     }
                 } else if (sourcePaneId === currentPaneId) {
+                    // item was reordered 
                     MainViewManager._moveWorkingSetItem(sourcePaneId, startingIndex, $el.index());
                     currentView._rebuildViewList();
                 } else {
+                    // item was dragged to another working set
                     MainViewManager._moveView(sourcePaneId, currentPaneId, $el.data(_FILE_KEY), $el.index());
                     exports.refresh(true);
                 }
-
                 _suppressSortRedrawForAllViews(false);
             }
 
+            // initialization
             $(window).on("mouseup.wsvdragging", function (e) {
                 drop();
             });
             
+            // let escape cancel the drag
             $(window).on("keydown.wsvdragging", function (e) {
                 if (e.keyCode === KeyEvent.DOM_VK_ESCAPE) {
                     cleanup();
+                    _suppressSortRedrawForAllViews(false);
                     exports.refresh(true);
                     e.stopPropagation();
                 }
-                _suppressSortRedrawForAllViews(false);
             });
             
+            // turn off scroll wheel
             window.onmousewheel = window.document.onmousewheel = function (e) {
                 e.preventDefault();
             };
@@ -410,7 +431,8 @@ define(function (require, exports, module) {
                             top: offset.top,
                             left: offset.left});
             
-            $copy.removeClass("can-close");
+            // don't show the close icon on the ghost
+            //$copy.removeClass("can-close");
 
             // this will give the element the appearence that it's ghosted if the user
             //  drags the element out of the view and goes off into no mans land
