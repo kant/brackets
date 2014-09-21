@@ -139,6 +139,10 @@ define(function (require, exports, module) {
             }
         }
 
+        function getActiveSelectionOffset() {
+            return $(".working-set-view.active li.selected").offset();
+        }
+        
         //  We scroll the list while hovering over the first or last visible list element
         //  in the working set, so that positioning a working set item before or after one
         //  that has been hidden can be performed.
@@ -184,6 +188,7 @@ define(function (require, exports, module) {
                 currentViewOffset = $currentView.offset(),
                 sourceView = _viewFromEl($currentContainer),
                 sourcePaneId = sourceView.paneId,
+                cachedActiveElementOffset = getActiveSelectionOffset(),
                 startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath),
                 selectedIndex = $currentView.find("li.selected").index(),
                 currentView = sourceView,
@@ -221,12 +226,16 @@ define(function (require, exports, module) {
                     function updateCurrentContext() {
                         currentContainerOffset = $currentContainer.offset();
                         currentViewOffset = $currentView.offset();
-                        var index = $currentView.find("li.selected").index();
+                        var index = $currentView.find("li.selected").index(),
+                            activeElementOffset = getActiveSelectionOffset();
                         // if the selected changes position in the list
                         //  then fire a selection 
                         if (index !== selectedIndex) {
                             currentView._fireSelectionChanged();
                             selectedIndex = index;
+                        } else if (cachedActiveElementOffset.top !== activeElementOffset.top) {
+                            _viewFromEl($(".working-set-view.active"))._fireSelectionChanged();
+                            cachedActiveElementOffset = activeElementOffset;
                         }
                     }
 
