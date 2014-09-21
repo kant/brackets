@@ -107,6 +107,38 @@ define(function (require, exports, module) {
         });
     }
     
+    
+    /** 
+     * caches the selection index for all views
+     * @private
+     * @param {boolean} suppress - true suppress, false to allow sort redrawing
+     */
+    function _cacheSelectionStateForAllViews(cache) {
+        _.forEach(_views, function (view) {
+            if (cache) {
+                view._selectedIndex = view.$el.find("li.selected").index(); 
+            } else {
+                delete view._selectedIndex;
+            }
+        });
+    }
+    
+    /** 
+     * updates the selection index for all views and fires a selection change
+     * event on the view if the selection index chnages from the previously cached value
+     * @private
+     * @param {boolean} suppress - true suppress, false to allow sort redrawing
+     */
+    function _updateSelectionStateForAllViews() {
+        _.forEach(_views, function (view) {
+            var index = view.$el.find("li.selected").index();
+            if ((view._selectedIndex !== undefined) && (index  !== view._selectedIndex)) {
+                view._fireSelectionChanged();
+                view._selectedIndex = index;
+            }
+        });
+    }    
+    
     /** 
      * Finds the WorkingsetView object for the specified element
      * @private
@@ -137,10 +169,6 @@ define(function (require, exports, module) {
                 window.clearInterval(interval);
                 interval = undefined;
             }
-        }
-
-        function getActiveSelectionOffset() {
-            return $(".working-set-view.active li.selected").offset();
         }
         
         //  We scroll the list while hovering over the first or last visible list element
@@ -178,7 +206,7 @@ define(function (require, exports, module) {
                 tryClosing = $(document.elementFromPoint(e.pageX, e.pageY)).hasClass("can-close"),
                 offset = $el.offset(),
                 $copy = $el.clone(),
-                $ghost = $("<div class='open-files-container' style='overflow: hidden; display: inline-block;'>").append($("<ul>").append($copy).css("padding", "0")),
+                $ghost = $("<div class='open-files-container wsv-drag-ghost' style='overflow: hidden; display: inline-block;'>").append($("<ul>").append($copy).css("padding", "0")),
                 $elem = $(document.elementFromPoint(e.pageX, e.pageY)).closest("#working-set-list-container li"),
                 $sourceContainer = $elem.parents(".open-files-container"),
                 sourceContainerOffset = $sourceContainer.offset(),
@@ -188,9 +216,7 @@ define(function (require, exports, module) {
                 currentViewOffset = $currentView.offset(),
                 sourceView = _viewFromEl($currentContainer),
                 sourcePaneId = sourceView.paneId,
-                cachedActiveElementOffset = getActiveSelectionOffset(),
                 startingIndex = MainViewManager.findInWorkingSet(sourcePaneId, sorceFile.fullPath),
-                selectedIndex = $currentView.find("li.selected").index(),
                 currentView = sourceView,
                 currentPaneId = sourcePaneId;
 
@@ -211,13 +237,18 @@ define(function (require, exports, module) {
             }
             
             $(window).on("mousemove.wsvdragging", function (e) {
-                // to to find an ListItem to insert next to
+                // find a ListItem to insert next to
                 $elem = findCLosestWorkingSetItem(e);
 
                 function drag(e) {
-
+                    // we've dragged the item so set
+                    //  dragged to true so we don't try and open it
                     dragged = true;
+                    // reset the scrolling direction to no-scroll
                     scrollDir = 0;
+                    // reset start so we don't drag again until the mouse 
+                    //  is moved 3 pixels to help prevent jitter
+                    startPageY = e.pageY;
                     
                     function hasValidContext() {
                         return Boolean(currentContainerOffset);
@@ -226,17 +257,7 @@ define(function (require, exports, module) {
                     function updateCurrentContext() {
                         currentContainerOffset = $currentContainer.offset();
                         currentViewOffset = $currentView.offset();
-                        var index = $currentView.find("li.selected").index(),
-                            activeElementOffset = getActiveSelectionOffset();
-                        // if the selected changes position in the list
-                        //  then fire a selection 
-                        if (index !== selectedIndex) {
-                            currentView._fireSelectionChanged();
-                            selectedIndex = index;
-                        } else if (cachedActiveElementOffset.top !== activeElementOffset.top) {
-                            _viewFromEl($(".working-set-view.active"))._fireSelectionChanged();
-                            cachedActiveElementOffset = activeElementOffset;
-                        }
+                        _updateSelectionStateForAllViews();
                     }
 
                     function switchContext($container) {
@@ -249,7 +270,6 @@ define(function (require, exports, module) {
                         currentView = _viewFromEl($currentContainer);
                         currentPaneId = currentView.paneId;
                         $currentView = $currentContainer.parent();
-                        selectedIndex = $currentView.find("li.selected").index();
                         updateCurrentContext();
                     }
                     
@@ -309,29 +329,29 @@ define(function (require, exports, module) {
                         }
                     }
 
-                    // move the dragging affordance
+                    // move the drag affordance
                     $ghost.css({top: e.pageY,
                                 left: offset.left});
 
-                    // see if we're inside a list near
-                    //  the top or bottom and start scrolling
-                    scrollDir = 0;
-                    
                     // see if we're in range to scroll
                     if ($currentContainer && $currentContainer.length) {
                         var topDelta = e.pageY - currentContainerOffset.top,
                             bottomDelta = e.pageY - ($currentContainer.height() + currentContainerOffset.top),
-                            inRange = function (val) {
+                            // the delta need sto be within +/- the height of the item
+                            //  at the top or bottom of the container to indicate a scroll
+                            inScrollingRegion = function (val) {
                                 return (Math.abs(val) < itemHeight);
                             };
                         
-                        if (inRange(topDelta)) {
+                        // see if we need to scroll
+                        if (inScrollingRegion(topDelta)) {
                             scrollDir = -1;
-                        } else if (inRange(bottomDelta)) {
+                        } else if (inScrollingRegion(bottomDelta)) {
                             scrollDir = 1;
                         }
                     }
                     
+                    // we need to scroll
                     if (scrollDir) {
                         // we're in range to scroll
                         scroll($currentContainer, scrollDir, function () {
@@ -351,7 +371,7 @@ define(function (require, exports, module) {
                 // if we have't started dragging yet then we wait until
                 //  the mouse has moved 3 pixels before we start dragging
                 //  to avoid the item moving when clicked or double clicked
-                if (dragged || Math.abs(e.pageY - startPageY) > 3) {
+                if (Math.abs(e.pageY - startPageY) > 3) {
                     drag(e);
                 }
             });
@@ -364,6 +384,7 @@ define(function (require, exports, module) {
                 $(window).off(".wsvdragging");
                 $ghost.remove();
                 $el.css("opacity", "");
+                _cacheSelectionStateForAllViews(false);
             }
             
             // Drop
@@ -419,7 +440,7 @@ define(function (require, exports, module) {
             // close all menus, and disable sorting 
             Menus.closeAll();
             _suppressSortRedrawForAllViews(true);
-
+            _cacheSelectionStateForAllViews(true);
             // on Mac, end the drop in other cases
             if (e.which !== LEFT_BUTTON || (e.ctrlKey && brackets.platform === "mac")) {
                 drop();
