@@ -360,33 +360,31 @@ define(function (require, exports, module) {
                     // Find out where to to drag it to
                     var ht = hitTest(e);
                     
-                    if (ht.where !== NOMANSLAND) {
-                        switch (ht.where) {
-                        case TOPSCROLL:
-                        case ABOVEITEM:
-                            if (ht.where === TOPSCROLL) {
-                                scrollDir = -1;
-                            }
-                            $el.insertBefore(ht.which);
-                            updateContext(ht, $el);
-                            break;
-                        case BOTSCROLL:
-                        case BELOWITEM:
-                            if (ht.where === BOTSCROLL) {
-                                scrollDir = 1;
-                            }
-                            $el.insertAfter(ht.which);
-                            updateContext(ht, $el);
-                            break;
-                        case BELOWVIEW:
-                            $el.appendTo(ht.which.find("ul"));
-                            updateContext(ht, $el);
-                            break;
-                        case ABOVEVIEW:
-                            $el.prependTo(ht.which.find("ul"));
-                            updateContext(ht, $el);
-                            break;
+                    switch (ht.where) {
+                    case TOPSCROLL:
+                    case ABOVEITEM:
+                        if (ht.where === TOPSCROLL) {
+                            scrollDir = -1;
                         }
+                        $el.insertBefore(ht.which);
+                        updateContext(ht, $el);
+                        break;
+                    case BOTSCROLL:
+                    case BELOWITEM:
+                        if (ht.where === BOTSCROLL) {
+                            scrollDir = 1;
+                        }
+                        $el.insertAfter(ht.which);
+                        updateContext(ht, $el);
+                        break;
+                    case BELOWVIEW:
+                        $el.appendTo(ht.which.find("ul"));
+                        updateContext(ht, $el);
+                        break;
+                    case ABOVEVIEW:
+                        $el.prependTo(ht.which.find("ul"));
+                        updateContext(ht, $el);
+                        break;
                     }
 
                     // move the drag affordance
@@ -511,12 +509,13 @@ define(function (require, exports, module) {
                 position: "absolute",
                 top: offset.top,
                 left: offset.left,
-                width: sourceView.$el.width(),
-                opacity: ".0001"
+                width: sourceView.$el.width()
+//                opacity: ".0001"
             });
             
             // this will give the element the appearence that it's ghosted if the user
             //  drags the element out of the view and goes off into no mans land
+            $el.css("opacity", "0.25");
             $ghost.appendTo($("body"));
         });
     }
